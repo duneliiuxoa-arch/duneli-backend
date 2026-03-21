@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "topic_scores" ADD COLUMN     "meetingJoins" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "messageCount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "voteCount" INTEGER NOT NULL DEFAULT 0;

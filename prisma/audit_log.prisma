@@ -1,0 +1,20 @@
+// Add to end of schema.prisma before closing brace
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String   // e.g. 'USER_DELETED', 'TOPIC_CREATED'
+  resource  String   // e.g. 'User', 'Topic'
+  resourceId String?
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}

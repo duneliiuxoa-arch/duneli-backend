@@ -1,0 +1,21 @@
+-- =============================================================
+-- Migration: chat_message_constraint
+-- Purpose: Enforce that every ChatMessage belongs to either
+--          a Topic OR a Meeting (at least one must be set).
+-- Note: Prisma does not support raw CHECK expressions in schema,
+--       so this constraint is applied via raw SQL migration.
+-- =============================================================
+
+-- Constraint was already applied manually via chatMessageConstraint.sql.
+-- This migration is a no-op — it exists only to register the constraint
+-- in Prisma's migration history so future deploys stay in sync.
+--
+-- If running on a fresh database (no prior manual apply), uncomment below:
+--
+-- ALTER TABLE "chat_messages"
+-- ADD CONSTRAINT "chat_message_parent_check"
+-- CHECK (
+--   "topicId" IS NOT NULL
+--   OR
+--   "meetingId" IS NOT NULL
+-- );

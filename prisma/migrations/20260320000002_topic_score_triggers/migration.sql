@@ -1,0 +1,10 @@
+-- =============================================================
+-- Migration: topic_score_triggers
+-- =============================================================
+-- Triggers were already applied manually via topicScoreTriggers.sql.
+-- This migration is a no-op — it exists only to register the triggers
+-- in Prisma's migration history so future deploys stay in sync.
+--
+-- If running on a FRESH database (no prior manual apply), use the
+-- full trigger definitions from: prisma/topicScoreTriggers.sql
+-- =============================================================

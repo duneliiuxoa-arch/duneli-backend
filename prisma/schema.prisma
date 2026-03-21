@@ -1,0 +1,284 @@
+// ===================================================================
+// DUNELI DATABASE SCHEMA - Prisma ORM
+// PostgreSQL Database Design
+// ===================================================================
+// Primary key strategy:
+//   uuid()  — core permanent tables (User, Topic, Meeting, Post, AuditLog, TopicScore)
+//   cuid()  — high-write junction/engagement tables (votes, views, likes, chat, session, attendee)
+// ===================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===================================================================
+// ENUMS
+// ===================================================================
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum TopicStatus {
+  ACTIVE
+  CLOSED
+  SELECTED
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+// ===================================================================
+// USER TABLE - PERMANENT DATA
+// ===================================================================
+model User {
+  id        String    @id @default(uuid())
+  name      String    @db.VarChar(100)
+  email     String    @unique @db.VarChar(255)
+  password  String    @db.VarChar(255)
+  role      UserRole  @default(USER)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  topics           Topic[]
+  meetingAttendees MeetingAttendee[]
+  sessions         Session[]
+  postLikes        PostLike[]
+  postViews        PostView[]
+  auditLogs        AuditLog[]
+  chatMessages     ChatMessage[]
+  topicVotes       TopicVote[]
+
+  @@index([email])
+  @@index([role])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+// ===================================================================
+// TOPIC TABLE - TEMPORARY DATA
+// ===================================================================
+model Topic {
+  id          String      @id @default(uuid())
+  title       String      @db.VarChar(200)
+  description String?     @db.Text
+  status      TopicStatus @default(ACTIVE)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  createdById String
+
+  createdBy    User          @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  meeting      Meeting?      @relation("TopicMeeting")
+  topicScore   TopicScore?
+  chatMessages ChatMessage[]
+  votes        TopicVote[]
+
+  // (status, createdAt) composite covers most list queries — standalone status/createdAt removed
+  @@index([createdById])
+  @@index([status, createdAt])
+  @@map("topics")
+}
+
+// ===================================================================
+// MEETING TABLE - PERMANENT DATA
+// ===================================================================
+model Meeting {
+  id          String        @id @default(uuid())
+  topicId     String        @unique
+  meetingDate DateTime
+  status      MeetingStatus @default(SCHEDULED)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  topic        Topic             @relation("TopicMeeting", fields: [topicId], references: [id], onDelete: Restrict)
+  attendees    MeetingAttendee[]
+  post         Post?
+  chatMessages ChatMessage[]
+
+  // topicId @unique already creates an index — no duplicate @@index needed
+  @@index([meetingDate])
+  @@index([status])
+  @@index([createdAt])
+  @@map("meetings")
+}
+
+// ===================================================================
+// POST TABLE - PERMANENT DATA
+// ===================================================================
+model Post {
+  id        String    @id @default(uuid())
+  title     String    @db.VarChar(300)
+  content   String    @db.Text
+  meetingId String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  meeting Meeting    @relation(fields: [meetingId], references: [id], onDelete: Restrict)
+  views   PostView[]
+  likes   PostLike[]
+
+  // meetingId @unique already creates an index — @@index removed (was duplicate)
+  @@map("posts")
+}
+
+// PostView — tracks unique views per user per post
+// updatedAt removed: a view record never changes after creation
+model PostView {
+  id       String   @id @default(cuid())
+  postId   String
+  userId   String
+  viewedAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+  @@map("post_views")
+}
+
+model PostLike {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+  @@map("post_likes")
+}
+
+// TopicScore — computed score, auto-maintained by SQL triggers + sync job
+// score changed Float → Int: formula always produces whole numbers
+// topicId @@index removed: @unique already creates a B-tree index
+model TopicScore {
+  id           String   @id @default(uuid())
+  topicId      String   @unique
+  score        Int      @default(0)
+  voteCount    Int      @default(0)
+  messageCount Int      @default(0)
+  meetingJoins Int      @default(0)
+  calculatedAt DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: Restrict)
+
+  @@index([score])
+  @@index([calculatedAt])
+  @@map("topic_scores")
+}
+
+model TopicVote {
+  id        String   @id @default(cuid())
+  topicId   String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([topicId, userId])
+  @@index([topicId])
+  @@index([userId])
+  @@map("topic_votes")
+}
+
+// ChatMessage — topic OR meeting chat (CHECK constraint enforced via SQL migration)
+// updatedAt added: needed when message editing is supported
+// Redundant standalone topicId/meetingId indexes removed — composites cover them
+model ChatMessage {
+  id        String    @id @default(cuid())
+  userId    String
+  topicId   String?
+  meetingId String?
+  message   String    @db.Text
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  topic   Topic?   @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  meeting Meeting? @relation(fields: [meetingId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([topicId, createdAt])
+  @@index([meetingId, createdAt])
+  @@index([deletedAt])
+  @@map("chat_messages")
+}
+
+// MeetingAttendee — permanent attendance record
+// Added (userId, joinedAt) composite for user-history queries
+model MeetingAttendee {
+  id        String    @id @default(cuid())
+  meetingId String
+  userId    String
+  joinedAt  DateTime  @default(now())
+  leftAt    DateTime?
+  updatedAt DateTime  @updatedAt
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Restrict)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([meetingId, userId], name: "unique_meeting_attendee")
+  @@index([meetingId, joinedAt])
+  @@index([userId, joinedAt])
+  @@map("meeting_attendees")
+}
+
+// Session — auth tokens, bcrypt-hashed before storage
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  // tokenHash @unique already indexes — standalone @@index([tokenHash]) removed
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// AuditLog — permanent security trail, RESTRICT delete (never cascade wipe)
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  action     String   @db.VarChar(100)
+  resource   String   @db.VarChar(100)
+  resourceId String?
+  details    Json?
+  ipAddress  String?  @db.VarChar(45)
+  userAgent  String?  @db.VarChar(500)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}
