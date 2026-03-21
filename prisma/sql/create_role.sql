@@ -1,0 +1,22 @@
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'duneli_app') THEN
+    CREATE ROLE duneli_app WITH
+      LOGIN
+      PASSWORD '6ucxzjh73WUPcScnN*vuYa5C'
+      NOSUPERUSER INHERIT NOCREATEDB NOCREATEROLE NOREPLICATION;
+    RAISE NOTICE 'Role duneli_app created.';
+  ELSE
+    ALTER ROLE duneli_app WITH PASSWORD '6ucxzjh73WUPcScnN*vuYa5C';
+    RAISE NOTICE 'Role duneli_app password updated.';
+  END IF;
+END $$;
+
+GRANT CONNECT ON DATABASE duneli TO duneli_app;
+GRANT USAGE ON SCHEMA public TO duneli_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO duneli_app;
+GRANT SELECT, USAGE ON ALL SEQUENCES IN SCHEMA public TO duneli_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO duneli_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, USAGE ON SEQUENCES TO duneli_app;
+
+SELECT rolname, rolcanlogin FROM pg_roles WHERE rolname = 'duneli_app';
