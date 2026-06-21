@@ -3,6 +3,11 @@
     "scripts": {
         "start": "node server.js",
         "dev": "node --watch server.js",
+        "pm2:start": "pm2 start ecosystem.config.cjs",
+        "pm2:stop": "pm2 stop duneli-db",
+        "pm2:restart": "pm2 restart duneli-db",
+        "pm2:logs": "pm2 logs duneli-db",
+        "pm2:status": "pm2 list",
         "db:migrate": "prisma migrate deploy",
         "db:studio": "prisma studio",
         "db:generate": "prisma generate"
@@ -12,9 +17,13 @@
     },
     "dependencies": {
         "@prisma/client": "^5.22.0",
-        "bcrypt": "^6.0.0",
+        "agora-token": "^2.0.5",
+        "cors": "^2.8.5",
         "dotenv": "^16.4.5",
         "express": "^4.21.2",
+        "express-rate-limit": "^7.4.0",
+        "helmet": "^8.0.0",
+        "jsonwebtoken": "^9.0.2",
         "node-cron": "^4.2.1",
         "prisma": "^5.22.0"
     }

@@ -12,8 +12,6 @@
 // =============================================================
 
 import { PrismaClient } from '@prisma/client';
-import { hashPasswordMiddleware } from './hashPassword.js';
-import { hashSessionTokenMiddleware } from './sessionMiddleware.js';
 
 // Prevent multiple Prisma instances during hot-reload in development
 const globalForPrisma = globalThis;
@@ -31,8 +29,8 @@ if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
 
-// ─── Middleware ──────────────────────────────────────────────
-prisma.$use(hashPasswordMiddleware);
-prisma.$use(hashSessionTokenMiddleware);
+// NOTE: hashPasswordMiddleware and hashSessionTokenMiddleware removed.
+// Auth is now handled entirely by Supabase Auth — no passwords or session
+// tokens are stored in this database.
 
 export default prisma;

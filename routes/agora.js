@@ -1,0 +1,49 @@
+// routes/agora.js — Agora RTC Token Generator
+import { Router } from 'express';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { RtcTokenBuilder, RtcRole } = require('agora-token');
+
+const router = Router();
+
+const APP_ID          = process.env.AGORA_APP_ID;
+const APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE;
+
+// POST /api/agora/token
+router.post('/token', (req, res) => {
+  try {
+    const { channelName, userId, role } = req.body;
+    if (!channelName) return res.status(400).json({ error: 'channelName is required' });
+
+    // If no certificate — return null token (testing mode, App ID only)
+    if (!APP_CERTIFICATE || APP_CERTIFICATE === 'YOUR_CERTIFICATE') {
+      console.log('[agora] No certificate — returning null token (testing mode)');
+      return res.json({ token: null, channelName });
+    }
+
+    const uid        = userId || 0;
+    const expireTime = 3600; // 1 hour
+    const currentTime   = Math.floor(Date.now() / 1000);
+    const privilegeExpire = currentTime + expireTime;
+
+    // Listeners get subscriber role, speakers/debaters get publisher
+    const agoraRole = (role === 'listener') ? RtcRole.SUBSCRIBER : RtcRole.PUBLISHER;
+
+    const token = RtcTokenBuilder.buildTokenWithUid(
+      APP_ID,
+      APP_CERTIFICATE,
+      channelName,
+      uid,
+      agoraRole,
+      privilegeExpire,
+      privilegeExpire
+    );
+
+    res.json({ token, channelName });
+  } catch (err) {
+    console.error('[agora] Token error:', err);
+    res.status(500).json({ error: 'Failed to generate token', detail: err.message });
+  }
+});
+
+export default router;

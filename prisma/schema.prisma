@@ -14,6 +14,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ===================================================================
@@ -39,21 +40,23 @@ enum MeetingStatus {
 
 // ===================================================================
 // USER TABLE - PERMANENT DATA
+// id = Supabase auth.users UUID (set by frontend after OAuth)
+// password and Session removed — auth is handled by Supabase Auth
 // ===================================================================
 model User {
-  id        String    @id @default(uuid())
-  name      String    @db.VarChar(100)
-  email     String    @unique @db.VarChar(255)
-  password  String    @db.VarChar(255)
-  role      UserRole  @default(USER)
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  id          String    @id  // Supabase auth.users UUID — no @default, set by app
+  name        String    @db.VarChar(100)
+  email       String    @unique @db.VarChar(255)
+  avatarUrl   String?   @db.VarChar(500)
+  anonymousId String?   @db.VarChar(20)
+  role        UserRole  @default(USER)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
 
   topics           Topic[]
   meetingAttendees MeetingAttendee[]
-  sessions         Session[]
   postLikes        PostLike[]
   postViews        PostView[]
   auditLogs        AuditLog[]
@@ -243,23 +246,6 @@ model MeetingAttendee {
   @@index([meetingId, joinedAt])
   @@index([userId, joinedAt])
   @@map("meeting_attendees")
-}
-
-// Session — auth tokens, bcrypt-hashed before storage
-model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  tokenHash String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
-
-  // tokenHash @unique already indexes — standalone @@index([tokenHash]) removed
-  @@index([userId])
-  @@index([expiresAt])
-  @@map("sessions")
 }
 
 // AuditLog — permanent security trail, RESTRICT delete (never cascade wipe)

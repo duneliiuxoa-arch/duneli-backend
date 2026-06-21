@@ -1,21 +1,14 @@
 // =============================================================
-// sessionCleanup.js — Purge expired sessions
-// Scheduled: every Sunday at 02:00 AM via scheduler.js
+// sessionCleanup.js — DEPRECATED (Supabase Auth migration)
+// Sessions are now managed entirely by Supabase Auth.
+// This file is kept as a no-op to avoid breaking the scheduler import.
+// The weekly cron in scheduler.js can be removed in a future cleanup.
 // =============================================================
-import prisma from '../../middleware/prismaClient.js';
 
 /**
- * Purges all sessions whose expiresAt is in the past.
- * Returns the number of deleted sessions.
+ * No-op: session cleanup is now handled by Supabase Auth automatically.
  */
 export async function purgeExpiredSessions() {
-  const result = await prisma.session.deleteMany({
-    where: {
-      expiresAt: { lt: new Date() },
-    },
-  });
-  console.log(
-    `[sessionCleanup] Deleted ${result.count} expired session(s) at ${new Date().toISOString()}`
-  );
-  return result.count;
+  console.log('[sessionCleanup] Skipped — sessions managed by Supabase Auth.');
+  return 0;
 }

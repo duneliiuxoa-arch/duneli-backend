@@ -1,5 +1,5 @@
 # Duneli — HTTPS & Deployment Guide
-*Generated: 2026-03-20*
+*Generated: 2026-03-20 | Updated: 2026-03-28 (secret redacted)*
 
 ---
 
@@ -42,9 +42,12 @@ railway init
 In Railway dashboard → your project → Variables, add:
 ```
 NODE_ENV=production
-SESSION_SECRET=b3ecdff478dd9723481db0b61b5553d642ace93d76a55d653289e8b7ddac0b675b487d3075656f6562f3e6d98039eff1
+SESSION_SECRET=<generate with: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))">
 DATABASE_URL=(use the one Railway generates for you — NOT your local one)
 ```
+
+> ⚠️ NEVER paste real secrets into this file or commit them to git.
+> Generate a fresh SESSION_SECRET for production — never reuse dev secrets.
 
 **Step 6: Deploy**
 ```powershell
@@ -161,8 +164,10 @@ With HTTPS:
 
 - [ ] Run `npx prisma migrate deploy` on production DB
 - [ ] Set NODE_ENV=production in production environment
-- [ ] SESSION_SECRET set (never use the dev one in production — generate a new one)
+- [ ] SESSION_SECRET set (generate fresh — never reuse dev secrets)
 - [ ] DATABASE_URL points to production DB (not localhost)
+- [ ] Restricted DB role (duneli_app) set up — see SECURITY.md
 - [ ] HTTPS enabled
 - [ ] Backup script scheduled on production server
 - [ ] postgres superuser password changed from default
+- [ ] CORS, helmet, rate-limit middleware confirmed active
