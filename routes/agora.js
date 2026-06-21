@@ -28,9 +28,9 @@ router.post('/token', (req, res) => {
       return res.json({ token: null, channelName });
     }
 
-    const uid        = userId || 0;
-    const expireTime = 3600; // 1 hour
-    const currentTime   = Math.floor(Date.now() / 1000);
+    const uid            = parseInt(userId) || 0;
+    const expireTime      = 3600;
+    const currentTime     = Math.floor(Date.now() / 1000);
     const privilegeExpire = currentTime + expireTime;
 
     // Listeners get subscriber role, speakers/debaters get publisher
