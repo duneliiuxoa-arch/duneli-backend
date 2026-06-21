@@ -5,6 +5,7 @@
 import { Router } from 'express';
 import prisma from '../prisma/middleware/prismaClient.js';
 import { requireAdminToken } from '../prisma/middleware/adminAuth.js';
+import { generateAndPublishArticle } from '../prisma/src/jobs/meetingArticleGenerator.js';
 
 const router = Router();
 router.use(requireAdminToken);
@@ -352,6 +353,16 @@ router.patch('/meetings/:id/status', async (req, res) => {
       data: { status },
       select: { id: true, status: true },
     });
+
+    // Meeting COMPLETE hone par — AI article auto-generate karo
+    if (status === 'COMPLETED') {
+      console.log(`[admin] Meeting ${req.params.id} completed — triggering article generation`);
+      // Background mein run karo (response wait na kare)
+      generateAndPublishArticle(req.params.id)
+        .then(result => console.log(`[admin] Article generated:`, result))
+        .catch(err  => console.error(`[admin] Article generation failed:`, err.message));
+    }
+
     res.json({ success: true, meeting });
   } catch (err) {
     console.error('[admin] PATCH /meetings/:id/status error:', err);
