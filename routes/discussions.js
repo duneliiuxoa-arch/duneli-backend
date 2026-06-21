@@ -165,6 +165,19 @@ router.get('/', async (req, res) => {
       },
     });
 
+    // ── Real-time active attendees: leftAt IS NULL means still in session ──
+    const meetingIds = topics.map(t => t.meeting?.id).filter(Boolean);
+    const activeCountsRaw = meetingIds.length > 0
+      ? await prisma.meetingAttendee.groupBy({
+          by: ['meetingId'],
+          where: { meetingId: { in: meetingIds }, leftAt: null },
+          _count: { id: true },
+        })
+      : [];
+    const activeCountMap = Object.fromEntries(
+      activeCountsRaw.map(r => [r.meetingId, r._count.id])
+    );
+
     // If logged in, check which topics user has voted on
     let userVotedTopicIds = new Set();
     if (userId) {
@@ -179,6 +192,8 @@ router.get('/', async (req, res) => {
       ...t,
       hasUserVoted: userVotedTopicIds.has(t.id),
       voteCount: t.topicScore?.voteCount ?? t._count.votes,
+      // activeAttendees = real-time users currently in session (leftAt is null)
+      activeAttendees: t.meeting?.id ? (activeCountMap[t.meeting.id] ?? 0) : 0,
     }));
 
     const total = await prisma.topic.count({ where: whereClause });
