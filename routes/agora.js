@@ -15,9 +15,16 @@ router.post('/token', (req, res) => {
     const { channelName, userId, role } = req.body;
     if (!channelName) return res.status(400).json({ error: 'channelName is required' });
 
-    // If no certificate — return null token (testing mode, App ID only)
+    // If no certificate — WARN clearly, don't silently return null
+    // In production, null token will cause Agora to reject with CAN_NOT_GET_GATEWAY_SERVER
     if (!APP_CERTIFICATE || APP_CERTIFICATE === 'YOUR_CERTIFICATE') {
-      console.log('[agora] No certificate — returning null token (testing mode)');
+      console.warn('[agora] ⚠️  AGORA_APP_CERTIFICATE not set — returning null token. Set it in Render/Railway env vars!');
+      // Return null only in development, error in production
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(500).json({
+          error: 'Agora certificate not configured on server. Set AGORA_APP_CERTIFICATE env variable.',
+        });
+      }
       return res.json({ token: null, channelName });
     }
 
