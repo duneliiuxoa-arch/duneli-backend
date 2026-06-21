@@ -124,9 +124,12 @@ router.get('/', async (req, res) => {
 
     const VALID_STATUSES = ['ACTIVE', 'CLOSED', 'SELECTED'];
     const statusFilter = status.toUpperCase();
-    const whereClause = VALID_STATUSES.includes(statusFilter)
-      ? { status: statusFilter }
-      : {};
+    // status=ALL (ya koi bhi non-whitelisted value) — sab topics, koi status filter nahi
+    const whereClause = statusFilter === 'ALL'
+      ? {}
+      : VALID_STATUSES.includes(statusFilter)
+        ? { status: statusFilter }
+        : { status: 'ACTIVE' };
 
     const topics = await prisma.topic.findMany({
       where: whereClause,
