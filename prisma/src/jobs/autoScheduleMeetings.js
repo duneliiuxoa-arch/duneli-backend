@@ -4,8 +4,8 @@
 import prisma from '../../middleware/prismaClient.js';
 
 const TOP_N          = 5;   // kitne topics schedule karne hain
-const MEETING_HOUR   = 18;  // next day 6:00 PM IST (12:30 UTC)
-const MEETING_MINUTE = 30;
+const MEETING_HOUR   = 12;  // 12:00 PM se start
+const MEETING_MINUTE = 0;
 
 export async function autoScheduleTopMeetings() {
   console.log('[autoSchedule] Starting top-5 auto-schedule job...');
@@ -43,8 +43,8 @@ export async function autoScheduleTopMeetings() {
     for (let i = 0; i < topTopics.length; i++) {
       const topic = topTopics[i];
 
-      // Har topic 90 min apart schedule karo
-      const meetingTime = new Date(tomorrow.getTime() + i * 90 * 60 * 1000);
+      // 12 hours ÷ 5 = 144 min each — equal slots, last ends exactly 12AM
+      const meetingTime = new Date(tomorrow.getTime() + i * 144 * 60 * 1000);
 
       try {
         await prisma.$transaction([
