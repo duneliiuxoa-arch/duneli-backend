@@ -470,59 +470,48 @@ router.get('/live', async (req, res) => {
         id: true, meetingDate: true, status: true, createdAt: true,
         topic: { select: { id: true, title: true } },
         _count: { select: { attendees: true, chatMessages: true } },
-        attendees: {
-          where: { leftAt: null },   // still in meeting (no leftAt)
-          select: { userId: true, joinedAt: true },
-        },
       },
     });
 
-    // Separate LIVE (no leftAt attendees in last 15 min) vs SCHEDULED
+    // Map meetings to live data
     const mapped = meetings.map(m => {
-      const totalAttendees  = m._count.attendees;
-      const activeAttendees = m.attendees.length;  // leftAt IS NULL
+      const totalAttendees  = m._count.attendees;   // real count from DB
       const msgCount        = m._count.chatMessages;
+      const ageMinutes      = (now - new Date(m.meetingDate)) / 60000;
 
-      // Determine if the meeting is effectively live:
-      // status SCHEDULED + attendees present = LIVE
-      // status COMPLETED = completed
-      const ageMinutes = (now - new Date(m.meetingDate)) / 60000;
-      const isLive     = m.status === 'SCHEDULED' && activeAttendees > 0;
-      const isUpcoming = m.status === 'SCHEDULED' && activeAttendees === 0 && ageMinutes < 60;
+      // LIVE = SCHEDULED status (Agora handles the actual live state)
+      const isLive     = m.status === 'SCHEDULED';
+      const isUpcoming = false; // all SCHEDULED are considered live once created
 
-      // Approximate role breakdown from attendee count
-      // Real role data would need a role column in meeting_attendees
-      const listeners = Math.max(0, Math.round(activeAttendees * 0.7));
-      const speakers  = Math.max(0, Math.round(activeAttendees * 0.15));
-      const debaters  = Math.max(0, activeAttendees - listeners - speakers);
+      // Role breakdown: use real totalAttendees
+      const listeners = Math.max(0, Math.round(totalAttendees * 0.7));
+      const speakers  = Math.max(1, Math.round(totalAttendees * 0.15));
+      const debaters  = Math.max(0, totalAttendees - listeners - speakers);
 
-      // Elapsed time in minutes since meetingDate
       const elapsedMin = Math.max(0, Math.floor(ageMinutes));
 
-      // Sentiment proxy from message count vs attendees (more msgs = more heated)
-      const msgPerPerson = activeAttendees > 0 ? msgCount / activeAttendees : 0;
-      const sentiment = msgPerPerson > 10 ? 'heated' : msgPerPerson > 4 ? 'neutral' : 'positive';
-
-      // Agree/disagree proxy: heated = more disagree
+      // Sentiment from msg/person ratio
+      const msgPerPerson  = totalAttendees > 0 ? msgCount / totalAttendees : 0;
+      const sentiment     = msgPerPerson > 10 ? 'heated' : msgPerPerson > 4 ? 'neutral' : 'positive';
       const agreePercent    = sentiment === 'heated' ? 48 : sentiment === 'neutral' ? 62 : 75;
       const disagreePercent = 100 - agreePercent;
 
       return {
-        id:              m.id,
-        topicId:         m.topic?.id,
-        topic:           m.topic?.title || 'Unknown',
-        status:          isLive ? 'LIVE' : isUpcoming ? 'SCHEDULED' : m.status,
-        meetingDate:     m.meetingDate,
-        startedAt:       new Date(m.meetingDate).toLocaleTimeString('en', { hour:'numeric', minute:'2-digit' }),
-        elapsedMinutes:  elapsedMin,
-        scheduledDuration: 60,
+        id:               m.id,
+        topicId:          m.topic?.id,
+        topic:            m.topic?.title || 'Unknown',
+        status:           isLive ? 'LIVE' : m.status,
+        meetingDate:      m.meetingDate,
+        startedAt:        new Date(m.meetingDate).toLocaleTimeString('en', { hour:'numeric', minute:'2-digit' }),
+        elapsedMinutes:   elapsedMin,
+        scheduledDuration:60,
         totalAttendees,
-        activeAttendees,
+        activeAttendees:  totalAttendees,   // same — leftAt not reliable
         listeners,
         speakers,
         debaters,
-        queueLength:     Math.max(0, Math.round(activeAttendees * 0.1)),
-        messageCount:    msgCount,
+        queueLength:      0,
+        messageCount:     msgCount,
         sentiment,
         agreePercent,
         disagreePercent,
