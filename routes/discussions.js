@@ -222,6 +222,29 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// ── POST /api/discussions/transcript — Save audio transcript segment ──
+router.post('/transcript', async (req, res) => {
+  try {
+    const { meetingId, userId, speaker, text, timestamp } = req.body;
+    if (!meetingId || !text) return res.status(400).json({ error: 'meetingId and text required' });
+
+    // ChatMessage ke roop mein save karo with type TRANSCRIPT
+    await prisma.chatMessage.create({
+      data: {
+        meetingId,
+        userId: userId || null,
+        message: `[TRANSCRIPT] [${speaker || 'Speaker'}]: ${text}`,
+        type: 'SYSTEM',
+      },
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[discussions] POST /transcript error:', err);
+    res.status(500).json({ error: 'Failed to save transcript', detail: err.message });
+  }
+});
+
 // ── POST /api/discussions/test-webhook — Sirf Dunora connection test ──
 // Development only — production mein remove karo
 router.post('/test-webhook', async (req, res) => {

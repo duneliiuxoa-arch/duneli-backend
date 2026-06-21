@@ -48,16 +48,31 @@ export async function generateAndPublishArticle(meetingId) {
     const messages      = meeting.chatMessages;
     const attendeeCount = meeting.attendees.length;
 
-    console.log(`[articleGen] Topic: "${topic.title}" | Messages: ${messages.length} | Attendees: ${attendeeCount}`);
+    // ── Transcript aur chat dono alag karo ───────────────────
+    const transcriptLines = messages
+      .filter(m => m.message.startsWith('[TRANSCRIPT]'))
+      .map(m => m.message.replace('[TRANSCRIPT] ', ''));
+
+    const chatLines = messages
+      .filter(m => !m.message.startsWith('[TRANSCRIPT]'))
+      .map(m => `[${m.user?.anonymousId || 'User'}]: ${m.message}`);
+
+    // Transcript priority — agar available hai toh woh use karo
+    const primaryContent = transcriptLines.length > 0
+      ? `AUDIO TRANSCRIPT:\n${transcriptLines.join('\n')}`
+      : `CHAT MESSAGES:\n${chatLines.join('\n')}`;
+
+    console.log(`[articleGen] Transcript lines: ${transcriptLines.length} | Chat lines: ${chatLines.length}`);
 
     // ── 2. Claude AI se article generate karo ────────────────
     const article = await generateArticleWithClaude({
-      topicTitle:   topic.title,
-      topicDesc:    topic.description,
-      messages,
-      attendees:    attendeeCount,
-      votes:        topic.topicScore?.voteCount ?? 0,
-      meetingDate:  meeting.meetingDate,
+      topicTitle:      topic.title,
+      topicDesc:       topic.description,
+      primaryContent,  // transcript ya chat
+      attendees:       attendeeCount,
+      votes:           topic.topicScore?.voteCount ?? 0,
+      meetingDate:     meeting.meetingDate,
+      hasTranscript:   transcriptLines.length > 0,
     });
 
     console.log(`[articleGen] Article generated: "${article.title}"`);
@@ -112,22 +127,15 @@ export async function generateAndPublishArticle(meetingId) {
 }
 
 // ── Claude AI article generator ───────────────────────────────
-async function generateArticleWithClaude({ topicTitle, topicDesc, messages, attendees, votes, meetingDate }) {
-
-  // Chat messages ko readable format mein convert karo
-  const chatTranscript = messages.length > 0
-    ? messages
-        .map(m => `[${m.user?.anonymousId || 'Anonymous'}]: ${m.message}`)
-        .join('\n')
-    : 'No chat messages recorded during this discussion.';
+async function generateArticleWithClaude({ topicTitle, topicDesc, primaryContent, attendees, votes, meetingDate, hasTranscript }) {
 
   const dateStr = new Date(meetingDate).toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
 
-  const prompt = `You are an expert journalist and discussion summarizer for Dunora, a platform that publishes summaries of live discussions from Duneli.
+  const prompt = `You are an expert journalist for Dunora, an intellectual discussion platform.
 
-A live discussion just ended on Duneli. Here are the details:
+A live ${hasTranscript ? 'audio discussion' : 'text discussion'} just ended on Duneli. Summarize it into a compelling article.
 
 **Topic:** ${topicTitle}
 ${topicDesc ? `**Description:** ${topicDesc}` : ''}
@@ -135,22 +143,19 @@ ${topicDesc ? `**Description:** ${topicDesc}` : ''}
 **Participants:** ${attendees} people
 **Interest votes:** ${votes}
 
-**Chat Transcript:**
-${chatTranscript.slice(0, 4000)}${chatTranscript.length > 4000 ? '\n...[transcript truncated]' : ''}
+**${hasTranscript ? 'Audio Transcript (verbatim spoken words)' : 'Chat Messages'}:**
+${primaryContent.slice(0, 6000)}${primaryContent.length > 6000 ? '\n...[truncated]' : ''}
 
----
+Write a comprehensive article (400-600 words) that:
+1. Has a compelling headline
+2. Captures the key arguments and perspectives from the ${hasTranscript ? 'spoken discussion' : 'discussion'}
+3. Highlights interesting viewpoints and debates
+4. Concludes with takeaways
 
-Write a comprehensive, engaging article summarizing this discussion for Dunora readers. The article should:
-1. Have a compelling headline
-2. Start with a strong introduction explaining what was discussed
-3. Cover the key points, arguments, and perspectives shared
-4. Highlight any consensus reached or major disagreements
-5. End with a conclusion and implications
-
-Return ONLY valid JSON in this exact format (no markdown, no extra text):
+Return ONLY valid JSON (no markdown):
 {
-  "title": "Article headline here",
-  "content": "Full article content here (use \\n\\n for paragraphs)",
+  "title": "Headline here",
+  "content": "Full article (use \\n\\n for paragraphs)",
   "tags": ["tag1", "tag2", "tag3"]
 }`;
 
