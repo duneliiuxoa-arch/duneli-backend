@@ -380,9 +380,96 @@ router.post('/complete', async (req, res) => {
   }
 });
 
-// ── POST /api/discussions/:id/vote ───────────────────────────
-// Toggle vote (show interest / remove interest). Auth required.
-router.post('/:id/vote', async (req, res) => {
+// GET /api/discussions/:id/ideas — fetch all shared ideas for a topic
+router.get('/:id/ideas', async (req, res) => {
+  const userId = getUserIdFromHeader(req);
+  try {
+    const ideas = await prisma.ideaShare.findMany({
+      where: { topicId: req.params.id },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        user: { select: { id: true, name: true, anonymousId: true } },
+        reactions: true,
+      },
+    });
+    const result = ideas.map(idea => ({
+      id: idea.id,
+      content: idea.content,
+      createdAt: idea.createdAt,
+      userId: idea.userId,
+      user: idea.user,
+      agreeCount:    idea.reactions.filter(r => r.type === 'agree').length,
+      disagreeCount: idea.reactions.filter(r => r.type === 'disagree').length,
+      hasUserAgreed:    userId ? idea.reactions.some(r => r.userId === userId && r.type === 'agree')    : false,
+      hasUserDisagreed: userId ? idea.reactions.some(r => r.userId === userId && r.type === 'disagree') : false,
+    }));
+    res.json({ ideas: result });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch ideas', detail: err.message });
+  }
+});
+
+// POST /api/discussions/:id/ideas — share a new idea
+router.post('/:id/ideas', async (req, res) => {
+  const userId = getUserIdFromHeader(req);
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  const { content } = req.body;
+  if (!content?.trim()) return res.status(400).json({ error: 'Content required' });
+  try {
+    await prisma.user.upsert({
+      where: { id: userId },
+      update: {},
+      create: { id: userId, name: 'User', email: `${userId}@duneli.app` },
+    });
+    const idea = await prisma.ideaShare.create({
+      data: { content: content.trim(), topicId: req.params.id, userId },
+      include: { user: { select: { id: true, name: true, anonymousId: true } } },
+    });
+    res.status(201).json({ idea });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create idea', detail: err.message });
+  }
+});
+
+// POST /api/discussions/:id/ideas/:ideaId/react — agree or disagree
+router.post('/:id/ideas/:ideaId/react', async (req, res) => {
+  const userId = getUserIdFromHeader(req);
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  const { type } = req.body;
+  if (!['agree', 'disagree'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
+  try {
+    await prisma.user.upsert({
+      where: { id: userId },
+      update: {},
+      create: { id: userId, name: 'User', email: `${userId}@duneli.app` },
+    });
+    const existing = await prisma.ideaReaction.findUnique({
+      where: { ideaId_userId: { ideaId: req.params.ideaId, userId } },
+    });
+    if (existing && existing.type === type) {
+      // Toggle off
+      await prisma.ideaReaction.delete({ where: { id: existing.id } });
+    } else if (existing) {
+      // Switch type
+      await prisma.ideaReaction.update({ where: { id: existing.id }, data: { type } });
+    } else {
+      // New reaction
+      await prisma.ideaReaction.create({ data: { ideaId: req.params.ideaId, userId, type } });
+    }
+    const counts = await prisma.ideaReaction.groupBy({
+      by: ['type'],
+      where: { ideaId: req.params.ideaId },
+      _count: { id: true },
+    });
+    const agreeCount    = counts.find(c => c.type === 'agree')?._count.id    || 0;
+    const disagreeCount = counts.find(c => c.type === 'disagree')?._count.id || 0;
+    res.json({ agreeCount, disagreeCount });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to react', detail: err.message });
+  }
+});
+
+// POST /api/discussions/:id/vote — Toggle vote (show interest)
   try {
     const userId = getUserIdFromHeader(req);
     if (!userId) {

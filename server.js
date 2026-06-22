@@ -14,6 +14,7 @@ import usersRouter from './routes/users.js';
 import discussionsRouter from './routes/discussions.js';
 import adminRouter from './routes/admin.js';
 import agoraRouter from './routes/agora.js';
+import ideasRouter from './routes/ideas.js';
 
 const app = express();
 

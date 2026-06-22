@@ -63,6 +63,7 @@ model User {
   auditLogs        AuditLog[]
   chatMessages     ChatMessage[]
   topicVotes       TopicVote[]
+  ideaShares       IdeaShare[]
 
   @@index([email])
   @@index([role])
@@ -87,6 +88,7 @@ model Topic {
   topicScore   TopicScore?
   chatMessages ChatMessage[]
   votes        TopicVote[]
+  ideaShares   IdeaShare[]
 
   // (status, createdAt) composite covers most list queries — standalone status/createdAt removed
   @@index([createdById])
@@ -247,6 +249,42 @@ model MeetingAttendee {
   @@index([meetingId, joinedAt])
   @@index([userId, joinedAt])
   @@map("meeting_attendees")
+}
+
+// IdeaShare — speaker/debater ideas shared during a meeting session
+// One idea per user per 5 minutes (enforced in API layer)
+// Reactions stored as counts + separate IdeaReaction join table
+model IdeaShare {
+  id        String   @id @default(cuid())
+  topicId   String
+  userId    String
+  content   String   @db.VarChar(1000)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  topic     Topic          @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  reactions IdeaReaction[]
+
+  @@index([topicId, createdAt])
+  @@index([userId, createdAt])
+  @@map("idea_shares")
+}
+
+// IdeaReaction — agree/disagree per user per idea (unique: one reaction per user)
+model IdeaReaction {
+  id        String   @id @default(cuid())
+  ideaId    String
+  userId    String
+  type      String   @db.VarChar(10) // 'agree' | 'disagree'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  idea IdeaShare @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+
+  @@unique([ideaId, userId])
+  @@index([ideaId])
+  @@map("idea_reactions")
 }
 
 // AuditLog — permanent security trail, RESTRICT delete (never cascade wipe)
